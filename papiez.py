@@ -73,7 +73,7 @@ def remove_subscriber(chat_id: int):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Wysyła wiadomość powitalną."""
     welcome_message = (
-        "Cześć! Jestem BarkaBot 🎵\n\n"
+        "Cześć! Jestem PapieżBot 🎵\n\n"
         "Codziennie o godzinie 21:37 będę wysyłać na ten czat tekst 'Barki'.\n\n"
         "➡️ Aby rozpocząć, użyj komendy /subskrybuj.\n"
         "ℹ️ Po listę wszystkich komend wpisz /pomoc."
