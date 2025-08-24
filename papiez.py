@@ -5,17 +5,13 @@ import asyncio
 from datetime import datetime, time as dt_time
 import pytz
 
-# ZMIANA: Importujemy funkcję do wczytywania pliku .env
-from dotenv import load_dotenv
-
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# ZMIANA: Wczytujemy zmienne środowiskowe z pliku .env na samym początku
+# --- KONFIGURACJA ---
+from dotenv import load_dotenv
 load_dotenv()
 
-# --- KONFIGURACJA ---
-# Teraz os.getenv odczyta wartość z pliku .env, jeśli jest dostępna
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "DOMYSLNY_TOKEN_JEZELI_BRAK")
 DB_FILE = "barka_bot.db"
 
@@ -87,7 +83,7 @@ async def pomoc(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "✅ /subskrybuj - Aktywuje codzienną wysyłkę 'Barki' o 21:37.\n\n"
         "❌ /anuluj - Zatrzymuje subskrypcję dla tego czatu.\n\n"
         "📊 /status - Sprawdza status subskrypcji i czas następnej wysyłki.\n\n"
-        "▶️ /terazspiewaj - Wysyła 'Barkę' natychmiast (do testów).\n\n"
+        "▶️ /terazspiewaj - Wysyła 'Barkę' natychmiast.\n\n"
         "❓ /pomoc - Wyświetla tę listę komend."
     )
     await update.message.reply_text(help_text)
@@ -118,7 +114,7 @@ async def anuluj(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Tego czatu nie ma na liście subskrybentów.")
 
 async def send_barka(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Główna funkcja wysyłająca wiadomości."""
+    """Główna funkcja wysyłająca wiadomości do WSZYSTKICH subskrybentów."""
     job = context.job
     subscribers = get_subscribers()
     logger.info(f"Uruchomiono zadanie '{job.name}'. Znaleziono {len(subscribers)} subskrybentów.")
@@ -139,12 +135,24 @@ async def send_barka(context: ContextTypes.DEFAULT_TYPE) -> None:
                 remove_subscriber(chat_id)
                 logger.info(f"Czat {chat_id} jest niedostępny. Usunięto z subskrypcji.")
 
+# ZMIANA: Całkowicie nowa logika dla tej funkcji
 async def teraz_spiewaj(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Wysyła 'Barkę' na żądanie."""
+    """Wysyła 'Barkę' na żądanie tylko do bieżącego czatu."""
     chat_id = update.effective_chat.id
-    logger.info(f"Użytkownik {chat_id} uruchomił ręczne wysyłanie przez /terazspiewaj.")
-    await update.message.reply_text("Już śpiewam! Rozpoczynam wysyłkę 'Barki'...")
-    context.job_queue.run_once(send_barka, 1, name="manual_send")
+    logger.info(f"Użytkownik {chat_id} uruchomił wysyłanie na żądanie przez /terazspiewaj.")
+    await update.message.reply_text("Już śpiewam! Wysyłam 'Barkę' tylko na tym czacie...")
+
+    try:
+        # Pętla wysyłająca tekst piosenki z opóźnieniem
+        for part in BARKA_LYRICS:
+            await context.bot.send_message(chat_id=chat_id, text=part)
+            await asyncio.sleep(2)
+        logger.info(f"Wysłano pomyślnie (na żądanie) do {chat_id}.")
+    except Exception as e:
+        logger.error(f"Nie udało się wysłać wiadomości na żądanie do {chat_id}: {e}")
+        # Opcjonalnie: poinformuj użytkownika o błędzie
+        await update.message.reply_text("Niestety, wystąpił błąd i nie mogłem dokończyć śpiewania.")
+
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sprawdza status bota."""
@@ -167,7 +175,6 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(status_text)
 
 def main() -> None:
-    # Delikatna zmiana w sprawdzaniu tokena, aby był bardziej uniwersalny
     if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == "DOMYSLNY_TOKEN_JEZELI_BRAK":
         logger.error("Nie znaleziono tokena bota! Upewnij się, że plik .env istnieje i zawiera TELEGRAM_TOKEN.")
         return
